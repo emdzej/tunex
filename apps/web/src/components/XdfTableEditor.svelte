@@ -64,10 +64,10 @@
   );
   const hexWidth = $derived(zSpec ? Math.max(2, Math.ceil(zSpec.sizeBits / 4)) : 2);
 
-  // Optional heatmap colouring per cell. Off by default so the user
-  // opts in for numeric tables where it helps spot curves; toggling
-  // doesn't affect text formatting.
-  let heatmap = $state(false);
+  // Optional heatmap colouring per cell. On by default — most tables
+  // are numeric and the gradient reveals curve shapes at a glance;
+  // toggling never affects text formatting.
+  let heatmap = $state(true);
 
   function formatValue(eng: number | null, raw: number | null): string {
     if (displayMode === "hex" && canShowHex && raw !== null) {
