@@ -418,12 +418,13 @@ declares.
 
 ## Known gaps (v0)
 
-- **3D tables** — the parser captures all three axes, but the editor
-  doesn't yet have a UI for editing 2D grids per Z-axis slice.
+- **3D tables** — none of the BMW ECU XDF files I've encountered
+  actually use a 3-axis-data layout; the convention is 2D tables
+  with x and y axes (often shared via `<embedinfo>`) and z as the
+  data. If a true 3D file surfaces, the parser will need a 3-D embed
+  type plus a slice-selector UI.
 - **`<DALINK>`** — data-acquisition reference (live ECU). Out of
-  scope.
-- **Encrypted XDF (`<openpassword>` / `<modifypassword>`)** — read
-  enough of the structure to surface a meaningful error.
+  scope for an offline editor.
 
 ## Reference files
 

@@ -521,6 +521,21 @@ export function parseXdf(xml: string): XdfDefinition {
 
   const headerEl = root.getElementsByTagName("XDFHEADER").item(0);
   if (!headerEl) throw new XdfParseError("missing <XDFHEADER>");
+
+  // Refuse encrypted files up front. TunerPro Pro can author .xdf
+  // files with <openpassword> or <modifypassword>; once those are
+  // set, the constants/flags/patches/tables further down the file
+  // are AES-encrypted with the password as the key. Without the
+  // key we'd parse garbled item bodies and present them as if real.
+  const openPw = getText(headerEl, "openpassword", "");
+  const modifyPw = getText(headerEl, "modifypassword", "");
+  if (openPw !== "" || modifyPw !== "") {
+    throw new XdfParseError(
+      "encrypted .xdf — this file uses TunerPro's openpassword/modifypassword encryption. " +
+        "tunex doesn't carry a decryptor; ask the author for an unencrypted copy.",
+    );
+  }
+
   const header = parseHeader(headerEl);
 
   const items: XdfItem[] = [];

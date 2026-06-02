@@ -119,6 +119,23 @@ describe("parseXdf — minimal synthetic", () => {
   it("rejects non-XDFFORMAT roots", () => {
     expect(() => parseXdf("<other/>")).toThrow(XdfParseError);
   });
+
+  it("rejects encrypted files (openpassword / modifypassword set)", () => {
+    const xml = `<?xml version="1.0"?>
+<XDFFORMAT version="1.70">
+  <XDFHEADER>
+    <flags>0x3</flags>
+    <fileversion>1.0</fileversion>
+    <deftitle>Locked</deftitle>
+    <author>tunex</author>
+    <openpassword>S3CRET</openpassword>
+    <BASEOFFSET offset="0" subtract="0" />
+    <DEFAULTS datasizeinbits="8" sigdigits="2" outputtype="1"
+              signed="0" lsbfirst="1" float="0" />
+  </XDFHEADER>
+</XDFFORMAT>`;
+    expect(() => parseXdf(xml)).toThrow(/encrypted/i);
+  });
 });
 
 // Fixture-driven coverage against the real community patchlists when
