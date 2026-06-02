@@ -24,8 +24,14 @@ export const app = $state<{
   filename: string;
   /** Has the binary been modified since load? */
   dirty: boolean;
-  /** Current cursor (byte offset). Always clamped to binary bounds. */
+  /** Current cursor (byte offset of the first byte). Always clamped to binary bounds. */
   cursor: number;
+  /**
+   * Width of the current "element" in bytes — 1 by default, but the
+   * contents-view click targets can set 2/4/8 when the user picks a
+   * multi-byte cell. The hex view highlights `[cursor, cursor+cursorSize)`.
+   */
+  cursorSize: number;
   /** Right-column contents rendering. */
   contentsMode: ContentsMode;
   /** Render numeric contents as horizontal bars instead of digits. */
@@ -46,6 +52,7 @@ export const app = $state<{
   filename: "",
   dirty: false,
   cursor: 0,
+  cursorSize: 1,
   contentsMode: "ascii",
   contentsBars: false,
   xdf: null,
@@ -216,10 +223,11 @@ export function loadBinary(bytes: Uint8Array, filename: string): void {
   app.view = "raw";
 }
 
-export function setCursor(offset: number): void {
+export function setCursor(offset: number, size = 1): void {
   if (!app.binary) return;
   const max = app.binary.length - 1;
   app.cursor = Math.max(0, Math.min(max, offset));
+  app.cursorSize = Math.max(1, size);
 }
 
 export function writeByte(offset: number, value: number): void {

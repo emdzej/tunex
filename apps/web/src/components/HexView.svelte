@@ -227,43 +227,87 @@
     return { buf, len };
   }
 
-  function rowContentsText(rowStart: number, mode: typeof app.contentsMode): string {
+  /** Per-cell text-mode rendering. Each cell knows its byte range so
+   *  the renderer can wrap it in a click target that sets the cursor. */
+  type TextCell = { offset: number; bytesPerCell: number; text: string; fits: boolean };
+  function rowContentsCells(rowStart: number, mode: typeof app.contentsMode): TextCell[] {
     const meta = CONTENTS_META[mode];
     const { buf, len } = rowBuffer(rowStart);
+    const cells: TextCell[] = [];
     if (mode === "ascii") {
-      let s = "";
       for (let i = 0; i < BYTES_PER_ROW; i++) {
-        s += i < len ? asciiChar(buf[i]) : " ";
+        const fits = i < len;
+        cells.push({
+          offset: rowStart + i,
+          bytesPerCell: 1,
+          text: fits ? asciiChar(buf[i]) : " ",
+          fits,
+        });
       }
-      return s;
+      return cells;
     }
-    const cells: string[] = [];
     for (let i = 0; i < BYTES_PER_ROW; i += meta.bytesPerCell) {
-      if (i + meta.bytesPerCell > len) {
-        cells.push(" ".repeat(meta.cellChars));
+      const fits = i + meta.bytesPerCell <= len;
+      if (!fits) {
+        cells.push({
+          offset: rowStart + i,
+          bytesPerCell: meta.bytesPerCell,
+          text: " ".repeat(meta.cellChars),
+          fits: false,
+        });
         continue;
       }
       const v = readNumeric(buf, i, meta.type as NumericType);
-      cells.push((v === null ? "" : v.toString()).padStart(meta.cellChars, " "));
+      cells.push({
+        offset: rowStart + i,
+        bytesPerCell: meta.bytesPerCell,
+        text: (v === null ? "" : v.toString()).padStart(meta.cellChars, " "),
+        fits: true,
+      });
     }
-    return cells.join(" ");
+    return cells;
   }
 
-  // Bars-mode rendering. Returns an array of { value, fits, pct, signed } per cell
-  // for the row. pct is in -100..100 (negative for signed below zero).
-  type BarCell = { fits: boolean; value: number; pct: number; signed: boolean };
+  // Bars-mode rendering. Returns an array of { value, fits, pct,
+  // signed, offset, bytesPerCell } per cell for the row. pct is in
+  // -100..100 (negative for signed below zero); offset + bytesPerCell
+  // let the renderer wrap each bar in a click target that sets the
+  // cursor to the matching byte range.
+  type BarCell = {
+    fits: boolean;
+    value: number;
+    pct: number;
+    signed: boolean;
+    offset: number;
+    bytesPerCell: number;
+  };
   function rowBars(rowStart: number, mode: typeof app.contentsMode): BarCell[] {
     const meta = CONTENTS_META[mode];
     const { buf, len } = rowBuffer(rowStart);
     const cells: BarCell[] = [];
     for (let i = 0; i < BYTES_PER_ROW; i += meta.bytesPerCell) {
+      const offset = rowStart + i;
       if (i + meta.bytesPerCell > len) {
-        cells.push({ fits: false, value: 0, pct: 0, signed: meta.signed });
+        cells.push({
+          fits: false,
+          value: 0,
+          pct: 0,
+          signed: meta.signed,
+          offset,
+          bytesPerCell: meta.bytesPerCell,
+        });
         continue;
       }
       const v = readNumeric(buf, i, meta.type as NumericType) ?? 0;
       const pct = (v / meta.maxAbs) * 100;
-      cells.push({ fits: true, value: v, pct: Math.max(-100, Math.min(100, pct)), signed: meta.signed });
+      cells.push({
+        fits: true,
+        value: v,
+        pct: Math.max(-100, Math.min(100, pct)),
+        signed: meta.signed,
+        offset,
+        bytesPerCell: meta.bytesPerCell,
+      });
     }
     return cells;
   }
@@ -299,7 +343,8 @@
             <span class="select-none pr-3 text-faint">{hex(rowStart, 6)}</span>
             <span class="pr-4">
               {#each Array.from({ length: rowEnd - rowStart }, (_, i) => rowStart + i) as off (off)}
-                {@const isCursor = off === app.cursor}
+                {@const isCursor =
+                  off >= app.cursor && off < app.cursor + app.cursorSize}
                 {@const ei = editInfo(off)}
                 {@const printable = isPrintable(effectiveByte(off))}
                 {@const highlighted =
@@ -310,7 +355,7 @@
                   type="button"
                   onclick={() => {
                     if (editor.start !== null) return;
-                    setCursor(off);
+                    setCursor(off, 1);
                   }}
                   ondblclick={() => startEdit(off)}
                   class="inline-block px-1 transition"
@@ -334,41 +379,72 @@
             </span>
 
             {#if useBars}
-              {@const cells = rowBars(rowStart, app.contentsMode)}
+              {@const barCells = rowBars(rowStart, app.contentsMode)}
               <span class="flex items-center gap-0.5 border-l border-divider pl-3">
-                {#each cells as cell, i (i)}
-                  <span
-                    class="relative inline-block h-3.5 bg-base/0"
+                {#each barCells as cell, i (i)}
+                  {@const cellActive =
+                    cell.fits &&
+                    app.cursor === cell.offset &&
+                    app.cursorSize === cell.bytesPerCell}
+                  <button
+                    type="button"
+                    class="relative inline-block h-3.5 rounded-sm bg-base/0 transition hover:bg-elevated disabled:cursor-default disabled:hover:bg-base/0"
+                    class:ring-1={cellActive}
+                    class:ring-accent={cellActive}
                     style="width: {contentsMeta.cellChars * 0.6}rem;"
                     title={cell.fits ? cell.value.toString() : ""}
+                    onclick={() => {
+                      if (editor.start !== null || !cell.fits) return;
+                      setCursor(cell.offset, cell.bytesPerCell);
+                    }}
+                    disabled={!cell.fits || editor.start !== null}
                   >
                     {#if cell.fits}
                       {#if cell.signed}
-                        <span class="absolute inset-y-0 left-1/2 w-px bg-divider"></span>
+                        <span class="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-divider"></span>
                         {#if cell.pct >= 0}
                           <span
-                            class="absolute inset-y-0.5 left-1/2 bg-accent/70"
+                            class="pointer-events-none absolute inset-y-0.5 left-1/2 bg-accent/70"
                             style="width: {cell.pct / 2}%;"
                           ></span>
                         {:else}
                           <span
-                            class="absolute inset-y-0.5 bg-accent/70"
+                            class="pointer-events-none absolute inset-y-0.5 bg-accent/70"
                             style="right: 50%; width: {-cell.pct / 2}%;"
                           ></span>
                         {/if}
                       {:else}
                         <span
-                          class="absolute inset-y-0.5 left-0 bg-accent/70"
+                          class="pointer-events-none absolute inset-y-0.5 left-0 bg-accent/70"
                           style="width: {cell.pct}%;"
                         ></span>
                       {/if}
                     {/if}
-                  </span>
+                  </button>
                 {/each}
               </span>
             {:else}
-              <span class="border-l border-divider pl-3 text-muted">
-                {rowContentsText(rowStart, app.contentsMode)}
+              {@const textCells = rowContentsCells(rowStart, app.contentsMode)}
+              {@const separator = app.contentsMode === "ascii" ? "" : " "}
+              <span class="flex items-center whitespace-pre border-l border-divider pl-3 text-muted">
+                {#each textCells as cell, i (i)}
+                  {@const cellActive =
+                    cell.fits &&
+                    app.cursor === cell.offset &&
+                    app.cursorSize === cell.bytesPerCell}
+                  <button
+                    type="button"
+                    class="whitespace-pre rounded-sm transition hover:bg-elevated disabled:cursor-default disabled:hover:bg-transparent"
+                    class:bg-accent={cellActive}
+                    class:text-black={cellActive}
+                    class:text-muted={!cellActive}
+                    onclick={() => {
+                      if (editor.start !== null || !cell.fits) return;
+                      setCursor(cell.offset, cell.bytesPerCell);
+                    }}
+                    disabled={!cell.fits || editor.start !== null}
+                  >{cell.text}</button>{#if i < textCells.length - 1}{separator}{/if}
+                {/each}
               </span>
             {/if}
           </div>

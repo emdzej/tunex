@@ -15,16 +15,33 @@
   let editType = $state<NumericType>("u8");
   let editValue = $state("");
   let editError = $state<string | null>(null);
+  // Editor input base — hex only makes sense for integer types; floats
+  // ignore this and stay decimal.
+  let editBase = $state<"dec" | "hex">("dec");
+
+  const isEditFloat = $derived(editType.startsWith("f"));
+  const editAsHex = $derived(editBase === "hex" && !isEditFloat);
+  const editHexWidth = $derived(NUMERIC_TYPE_SIZES[editType] * 2);
+
+  function formatForInput(v: number | null): string {
+    if (v === null) return "";
+    if (editAsHex) {
+      // Mask negatives into the unsigned representation so an int8 of -1
+      // shows as FF rather than -1.
+      const bytes = NUMERIC_TYPE_SIZES[editType];
+      const mask = bytes >= 4 ? 0xffffffff : (1 << (bytes * 8)) - 1;
+      return (v & mask).toString(16).toUpperCase().padStart(editHexWidth, "0");
+    }
+    return v.toString();
+  }
 
   // Auto-populate the edit input with the current cursor value for
-  // the chosen type. Re-fires whenever the type or cursor changes
-  // (i.e. when the user moves around or picks a different type),
-  // overwriting prior input — typing in between navigation isn't
-  // disrupted because the effect only triggers on those deps.
+  // the chosen type. Re-fires when cursor, type, or base change so
+  // the input always mirrors what the user would write back.
   $effect(() => {
     void app.cursor; // track dependency
     const v = readSingle(editType);
-    editValue = v !== null ? v.toString() : "";
+    editValue = formatForInput(v);
     editError = null;
   });
 
@@ -96,6 +113,24 @@
     if (isFloat) {
       const n = Number(trimmed);
       return Number.isFinite(n) ? n : null;
+    }
+    // Hex mode: accept bare hex (FF) or 0x-prefixed.
+    if (editAsHex) {
+      const negative = trimmed.startsWith("-");
+      const body = trimmed.replace(/^-/, "").replace(/^0x/i, "");
+      if (body === "" || !/^[0-9a-fA-F]+$/.test(body)) return null;
+      let n = parseInt(body, 16);
+      if (!Number.isFinite(n)) return null;
+      if (negative) n = -n;
+      // For unsigned types in hex mode let users type the unsigned form
+      // of a "negative" raw byte (FF for -1 on a signed type). Sign
+      // re-extension happens via the encoder.
+      const bytes = NUMERIC_TYPE_SIZES[type];
+      const max = bytes >= 4 ? 0xffffffff : (1 << (bytes * 8)) - 1;
+      if (!negative && type.startsWith("i") && n > max / 2) {
+        n = n - max - 1;
+      }
+      return n;
     }
     const isHex = /^-?0x/i.test(trimmed);
     const n = isHex
@@ -178,10 +213,30 @@
               <option value={type}>{NUMERIC_TYPE_LABELS[type]}</option>
             {/each}
           </select>
+          {#if !isEditFloat}
+            <div class="flex items-center rounded border border-divider bg-elevated p-0.5 text-faint">
+              <button
+                type="button"
+                class="rounded px-1 transition"
+                class:bg-accent={editBase === "dec"}
+                class:text-black={editBase === "dec"}
+                onclick={() => (editBase = "dec")}
+                title="Decimal input"
+              >dec</button>
+              <button
+                type="button"
+                class="rounded px-1 transition"
+                class:bg-accent={editBase === "hex"}
+                class:text-black={editBase === "hex"}
+                onclick={() => (editBase = "hex")}
+                title="Hex input"
+              >hex</button>
+            </div>
+          {/if}
           <input
             type="text"
             bind:value={editValue}
-            placeholder={editType.startsWith("f") ? "3.14" : "dec / 0x…"}
+            placeholder={isEditFloat ? "3.14" : editAsHex ? "FF" : "dec / 0x…"}
             class="w-24 rounded border border-divider bg-base px-1 py-0.5 text-foreground focus:border-accent focus:outline-none"
           />
           <button
