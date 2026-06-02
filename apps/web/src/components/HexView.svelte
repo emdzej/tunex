@@ -432,9 +432,17 @@
                     cell.fits &&
                     app.cursor === cell.offset &&
                     app.cursorSize === cell.bytesPerCell}
+                  <!--
+                    Each cell button gets some horizontal padding + a
+                    min-width so single-character ASCII still presents a
+                    comfortable click target. min-width is measured in
+                    `ch` so it tracks the monospace metric — keeps rows
+                    aligned across visible chars.
+                  -->
                   <button
                     type="button"
-                    class="whitespace-pre rounded-sm transition hover:bg-elevated disabled:cursor-default disabled:hover:bg-transparent"
+                    class="whitespace-pre rounded-sm px-1 text-center transition hover:bg-elevated disabled:cursor-default disabled:hover:bg-transparent"
+                    style="min-width: {Math.max(1.5, cell.text.length)}ch;"
                     class:bg-accent={cellActive}
                     class:text-black={cellActive}
                     class:text-muted={!cellActive}

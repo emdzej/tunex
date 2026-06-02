@@ -4,8 +4,12 @@ import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Read the version from the workspace root `package.json` rather than
+// the app's own — keeps a single source of truth for git tags / release
+// pages / the hub's version pill. apps/web/package.json's version
+// field is unused.
 const pkg = JSON.parse(
-  readFileSync(fileURLToPath(new URL("./package.json", import.meta.url)), "utf8"),
+  readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
 ) as { version: string };
 
 // When deploying to GitHub Pages under https://emdzej.github.io/tunex/
