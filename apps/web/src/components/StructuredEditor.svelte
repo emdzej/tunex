@@ -77,7 +77,12 @@
   {:else}
     <div class="flex min-h-0 flex-1">
       <aside class="w-72 shrink-0 border-r border-divider bg-base">
-        <XdfTreePanel xdf={app.xdf} />
+        <!-- Remount the tree when a different .xdf is loaded so its
+             internal state (search box, per-category collapse) resets
+             instead of leaking across files. -->
+        {#key app.xdfFilename}
+          <XdfTreePanel xdf={app.xdf} />
+        {/key}
       </aside>
       <section class="min-w-0 flex-1 overflow-auto p-4">
         {#if selected}
