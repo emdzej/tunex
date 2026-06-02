@@ -293,20 +293,27 @@
     editError = null;
   }
 
-  // Focus + select the edit input when it appears. autofocus is
-  // unreliable for inputs that appear after the initial page load,
-  // and a `use:` action sometimes runs before the click that opened
-  // the editor releases focus. Effect-after-bind is the cleanest
-  // ordering: the bind sets editInputEl once the DOM is committed,
-  // and the effect then focuses on the next microtask.
-  let editInputEl = $state<HTMLInputElement | null>(null);
+  // Focus + select the edit input when it appears. autofocus only
+  // works on the first input the page mounts, and we render new
+  // inputs every time the user opens a cell. bind:this + $effect
+  // covers that: bind populates editInputEl as soon as the DOM node
+  // exists, the $effect runs after the commit phase.
+  let editInputEl: HTMLInputElement | undefined = $state();
+
   $effect(() => {
-    const el = editInputEl;
-    if (!el || !editing) return;
-    queueMicrotask(() => {
-      el.focus();
-      el.select();
-    });
+    if (editing && editInputEl) {
+      editInputEl.focus();
+      editInputEl.select();
+    }
+  });
+
+  // Closing the edit when the user switches to a different item —
+  // selecting another table in the tree should NOT keep an editor
+  // active for cell (r, c) of the previous table.
+  $effect(() => {
+    void item.uniqueid;
+    editing = null;
+    editError = null;
   });
 </script>
 

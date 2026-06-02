@@ -49,6 +49,17 @@ polish, and a much friendlier hex / interpretation workflow.
   collapse state reset to the new file's contents.
 - Encrypted XDFs surface in the error banner instead of populating
   the tree with garbled items.
+- **Modified-since-load markers** — `loadBinary` snapshots a copy of
+  the bytes; constants, flags, patches, and tables each surface an
+  amber "modified" badge (and amber border) when any byte in their
+  backing range differs from the snapshot. Per-cell highlighting in
+  table editors uses the same convention.
+- Table-cell edit input grabs focus on open (via `bind:this` +
+  `$effect` after the DOM commit), so double-clicking goes straight
+  into editing without a second click on the input.
+- Edit state resets when the user switches to a different structured
+  item — selecting another table no longer keeps a cell editor open
+  for the previous table.
 
 ### Added — RAW editor
 
@@ -65,6 +76,8 @@ polish, and a much friendlier hex / interpretation workflow.
   byte rows no longer hug the window edge.
 - Cell click targets are wide enough to hit comfortably even for
   single ASCII characters.
+- Modified-since-load bytes render in amber + bold; tooltip on each
+  cell shows the original byte value.
 
 ### Changed
 
@@ -74,6 +87,12 @@ polish, and a much friendlier hex / interpretation workflow.
 
 ### Fixed
 
+- Structured-editor writes now propagate visually. Uint8Array index
+  assignments don't go through Svelte's `$state` proxy, so reactive
+  readers were stuck on the bytes they read at first render. A new
+  `app.binaryRev` counter is bumped by every mutator; every reader
+  (constant / flag / patch / table cell / interpretation panel / hex
+  bytes) subscribes to it.
 - Structured tree no longer crashes with "duplicate each key" when an
   item lists the same `CATEGORYMEM` slot twice (parser-side dedupe +
   resilient composite key on the `each` block).
