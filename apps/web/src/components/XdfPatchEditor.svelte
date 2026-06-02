@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { XdfPatch } from "@tunex/xdf-parser";
   import { patchEntryState, type PatchEntryState } from "@tunex/xdf-parser";
-  import { app, writeBytes } from "../lib/state.svelte";
+  import { app, writeBytes, isRangeChanged } from "../lib/state.svelte";
   import { hex } from "../lib/format";
 
   interface Props {
@@ -16,6 +16,7 @@
     hasBase: boolean;
     patchHex: string;
     baseHex: string;
+    modified: boolean;
   };
 
   function toHex(bytes: Uint8Array): string {
@@ -27,6 +28,7 @@
   }
 
   const entries = $derived.by<EntryView[]>(() => {
+    void app.binaryRev; // refresh on byte mutations
     if (!app.binary) {
       return item.entries.map((e) => ({
         name: e.name,
@@ -35,6 +37,7 @@
         hasBase: e.basedata.length > 0,
         patchHex: toHex(e.patchdata),
         baseHex: toHex(e.basedata),
+        modified: false,
       }));
     }
     return item.entries.map((e) => ({
@@ -44,6 +47,7 @@
       hasBase: e.basedata.length > 0,
       patchHex: toHex(e.patchdata),
       baseHex: toHex(e.basedata),
+      modified: isRangeChanged(e.address, e.address + e.datasize),
     }));
   });
 
@@ -128,9 +132,15 @@
 
   <ul class="space-y-2">
     {#each entries as e, idx (idx)}
-      <li class="rounded border border-divider bg-elevated p-2 text-xs">
+      <li class="rounded border p-2 text-xs {e.modified ? 'border-amber-500 bg-amber-500/5' : 'border-divider bg-elevated'}">
         <div class="flex items-center gap-2">
           <span class="rounded border px-2 py-0.5 font-hex {badgeClass(e.state)}">{badgeLabel(e.state)}</span>
+          {#if e.modified}
+            <span
+              class="h-1.5 w-1.5 rounded-full bg-amber-400"
+              title="Bytes differ from the file as loaded"
+            ></span>
+          {/if}
           <span class="flex-1 truncate font-medium text-foreground" title={e.name}>{e.name || `entry ${idx + 1}`}</span>
           <span class="font-hex text-faint">0x{hex(e.address, 6)}</span>
         </div>

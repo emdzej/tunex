@@ -7,7 +7,7 @@
     compileMath,
     invertLinear,
   } from "@tunex/xdf-parser";
-  import { app, writeBytes } from "../lib/state.svelte";
+  import { app, writeBytes, isRangeChanged } from "../lib/state.svelte";
   import { hex } from "../lib/format";
 
   interface Props {
@@ -32,7 +32,15 @@
     }
   });
 
-  const rawValue = $derived(app.binary ? readScalar(app.binary, spec) : null);
+  const rawValue = $derived.by(() => {
+    void app.binaryRev; // refresh on byte mutations
+    return app.binary ? readScalar(app.binary, spec) : null;
+  });
+  const sizeBytes = $derived(Math.max(1, Math.ceil(spec.sizeBits / 8)));
+  const modified = $derived.by(() => {
+    void app.binaryRev;
+    return isRangeChanged(spec.address, spec.address + sizeBytes);
+  });
   const engValue = $derived(
     rawValue !== null && toEng ? toEng(rawValue) : null,
   );
@@ -143,8 +151,18 @@
     {/if}
   </div>
 
+  {#if modified}
+    <div
+      class="inline-flex items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300"
+      title="Bytes at this address differ from the file as loaded"
+    >
+      <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+      modified since load
+    </div>
+  {/if}
+
   <div class="grid grid-cols-2 gap-3">
-    <div class="space-y-1 rounded border border-divider bg-elevated p-2">
+    <div class="space-y-1 rounded border p-2 {modified ? 'border-amber-500 bg-amber-500/5' : 'border-divider bg-elevated'}">
       <span class="text-xs text-faint">Engineering</span>
       <div class="font-hex text-lg text-foreground">
         {engValue !== null ? formatEng(engValue) : "—"}

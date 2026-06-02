@@ -10,6 +10,7 @@
     cancelEdit,
     appendEditChar,
     popEditChar,
+    isByteChanged,
   } from "../lib/state.svelte";
   import { asciiChar, isPrintable, readNumeric, type NumericType } from "../lib/interpret";
   import { hex } from "../lib/format";
@@ -351,6 +352,7 @@
                   app.highlightRange !== null &&
                   off >= app.highlightRange.start &&
                   off < app.highlightRange.end}
+                {@const changed = (app.binaryRev, isByteChanged(off))}
                 <button
                   type="button"
                   onclick={() => {
@@ -366,11 +368,15 @@
                   class:ring-opacity-50={highlighted && !isCursor && !ei.editing}
                   class:ring-1={ei.editing && !ei.finalized}
                   class:ring-accent-muted={ei.editing && !ei.finalized}
-                  class:text-muted={!isCursor && !ei.editing && !printable}
-                  class:text-foreground={!isCursor && !ei.editing && printable}
+                  class:text-amber-400={changed && !isCursor && !ei.editing}
+                  class:font-bold={changed && !isCursor && !ei.editing}
+                  class:text-muted={!changed && !isCursor && !ei.editing && !printable}
+                  class:text-foreground={!changed && !isCursor && !ei.editing && printable}
                   title={ei.editing
                     ? "Editing — Enter to accept, Esc to cancel"
-                    : `0x${hex(off, 6)} — double-click to edit`}
+                    : changed
+                      ? `0x${hex(off, 6)} — changed from 0x${hex(app.binaryOrig?.[off] ?? 0, 2)}`
+                      : `0x${hex(off, 6)} — double-click to edit`}
                 >{ei.display ?? hex(bytes[off], 2)}</button>
               {/each}
               {#if rowEnd - rowStart < BYTES_PER_ROW}

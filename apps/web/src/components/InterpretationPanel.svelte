@@ -40,6 +40,7 @@
   // the input always mirrors what the user would write back.
   $effect(() => {
     void app.cursor; // track dependency
+    void app.binaryRev; // refresh on byte mutations
     const v = readSingle(editType);
     editValue = formatForInput(v);
     editError = null;

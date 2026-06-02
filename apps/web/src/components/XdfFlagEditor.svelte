@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { XdfFlag, XdfDefinition } from "@tunex/xdf-parser";
   import { resolveEmbedded, readFlag, applyFlag } from "@tunex/xdf-parser";
-  import { app, writeByte } from "../lib/state.svelte";
+  import { app, writeByte, isByteChanged } from "../lib/state.svelte";
   import { hex } from "../lib/format";
 
   interface Props {
@@ -11,9 +11,14 @@
   let { item, xdf }: Props = $props();
 
   const spec = $derived(resolveEmbedded(item.embed, xdf.header.baseOffset, xdf.header.defaults));
-  const value = $derived(
-    app.binary ? readFlag(app.binary, spec.address, item.mask) : null,
-  );
+  const value = $derived.by(() => {
+    void app.binaryRev; // refresh on byte mutations
+    return app.binary ? readFlag(app.binary, spec.address, item.mask) : null;
+  });
+  const modified = $derived.by(() => {
+    void app.binaryRev;
+    return isByteChanged(spec.address);
+  });
 
   function toggle(): void {
     if (!app.binary || value === null) return;
@@ -29,9 +34,18 @@
       <span class="ml-2">mask <span class="font-hex">0x{hex(item.mask, 2)}</span></span>
     </p>
   </div>
+  {#if modified}
+    <div
+      class="inline-flex items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300"
+      title="Byte at this address differs from the file as loaded"
+    >
+      <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+      modified since load
+    </div>
+  {/if}
   <button
     type="button"
-    class="flex items-center gap-3 rounded border border-divider bg-elevated p-3 transition hover:border-accent disabled:opacity-50"
+    class="flex items-center gap-3 rounded border p-3 transition hover:border-accent disabled:opacity-50 {modified ? 'border-amber-500 bg-amber-500/5' : 'border-divider bg-elevated'}"
     onclick={toggle}
     disabled={!app.binary || value === null}
   >

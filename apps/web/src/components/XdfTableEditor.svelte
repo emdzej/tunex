@@ -9,7 +9,7 @@
     resolveEmbedded,
     tableCellAddress,
   } from "@tunex/xdf-parser";
-  import { app, writeBytes } from "../lib/state.svelte";
+  import { app, writeBytes, isRangeChanged } from "../lib/state.svelte";
   import { hex } from "../lib/format";
 
   interface Props {
@@ -169,12 +169,13 @@
   }
 
   type CellRead =
-    | { raw: number; eng: number | null; absAddr: number }
-    | { raw: null; eng: null; reason: string };
+    | { raw: number; eng: number | null; absAddr: number; modified: boolean }
+    | { raw: null; eng: null; reason: string; modified: false };
 
   function readCell(row: number, col: number): CellRead {
-    if (!app.binary) return { raw: null, eng: null, reason: "no firmware loaded" };
-    if (!zAxis || !zSpec) return { raw: null, eng: null, reason: "no Z axis" };
+    void app.binaryRev; // refresh on byte mutations
+    if (!app.binary) return { raw: null, eng: null, reason: "no firmware loaded", modified: false };
+    if (!zAxis || !zSpec) return { raw: null, eng: null, reason: "no Z axis", modified: false };
     const e = zAxis.embed;
     const cellAddr = tableCellAddress(e, row, col);
     if (cellAddr === null) {
@@ -182,6 +183,7 @@
         raw: null,
         eng: null,
         reason: `tableCellAddress(row=${row}, col=${col}) → null. embed: ele=${e.elementsizebits}, rows=${e.rowcount}, cols=${e.colcount}, major=${e.majorstridebits}, minor=${e.minorstridebits}, addr=0x${e.address.toString(16)}`,
+        modified: false,
       };
     }
     const absAddr = resolveAddress(cellAddr, xdf.header.baseOffset);
@@ -191,9 +193,12 @@
         raw: null,
         eng: null,
         reason: `address 0x${absAddr.toString(16).toUpperCase()} past end of firmware (${app.binary.length} bytes)`,
+        modified: false,
       };
     }
-    return { raw, eng: zToEng ? zToEng(raw) : null, absAddr };
+    const sizeBytes = Math.max(1, Math.ceil(zSpec.sizeBits / 8));
+    const modified = isRangeChanged(absAddr, absAddr + sizeBytes);
+    return { raw, eng: zToEng ? zToEng(raw) : null, absAddr, modified };
   }
 
   // First non-OK reason hit while rendering — surfaced once as a panel
@@ -287,6 +292,14 @@
     editing = null;
     editError = null;
   }
+
+  // Svelte action: focus and select the input when it mounts. More
+  // reliable than the autofocus attribute, which browsers only honour
+  // for the first input on the initial page load.
+  function focusOnMount(el: HTMLInputElement): void {
+    el.focus();
+    el.select();
+  }
 </script>
 
 <div class="space-y-3">
@@ -377,11 +390,10 @@
                 >
                   {#if isEditing}
                     <form onsubmit={commitEdit} class="flex">
-                      <!-- svelte-ignore a11y_autofocus -->
                       <input
                         type="text"
                         bind:value={editValue}
-                        autofocus
+                        use:focusOnMount
                         class="w-24 bg-accent px-1 py-0.5 text-black focus:outline-none"
                         onkeydown={(e) => {
                           if (e.key === "Escape") {
@@ -394,9 +406,14 @@
                   {:else}
                     <button
                       type="button"
-                      class="w-full px-1.5 py-0.5 text-right text-foreground transition hover:bg-elevated disabled:opacity-50"
+                      class="w-full px-1.5 py-0.5 text-right transition hover:bg-elevated disabled:opacity-50"
+                      class:text-amber-400={cell.modified}
+                      class:font-bold={cell.modified}
+                      class:text-foreground={!cell.modified}
                       onclick={() => openEdit(rIdx, cIdx)}
+                      ondblclick={() => openEdit(rIdx, cIdx)}
                       disabled={!app.binary}
+                      title={cell.modified ? "Modified since load" : undefined}
                     >{formatValue(cell.eng, cell.raw)}</button>
                   {/if}
                 </td>

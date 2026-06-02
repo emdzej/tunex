@@ -20,10 +20,25 @@ export const app = $state<{
   view: AppView;
   /** Loaded firmware bytes. `null` when no file is mounted. */
   binary: Uint8Array | null;
+  /**
+   * Immutable snapshot of the binary at load time. Used to flag
+   * "this byte has been modified since the file was opened" in the
+   * RAW and Structured views. Reset alongside `binary` whenever a new
+   * file is loaded.
+   */
+  binaryOrig: Uint8Array | null;
   /** Original filename — preserved across edits so Save reuses it. */
   filename: string;
   /** Has the binary been modified since load? */
   dirty: boolean;
+  /**
+   * Bump counter for binary mutations. Uint8Array index assignments
+   * don't go through Svelte's $state proxy, so reactive readers that
+   * derive values from `app.binary[i]` won't re-fire on those writes.
+   * Every mutator increments `binaryRev`; consumers add a
+   * `void app.binaryRev` line in their $derived/$effect to subscribe.
+   */
+  binaryRev: number;
   /** Current cursor (byte offset of the first byte). Always clamped to binary bounds. */
   cursor: number;
   /**
@@ -49,8 +64,10 @@ export const app = $state<{
 }>({
   view: "picker",
   binary: null,
+  binaryOrig: null,
   filename: "",
   dirty: false,
+  binaryRev: 0,
   cursor: 0,
   cursorSize: 1,
   contentsMode: "ascii",
@@ -217,10 +234,31 @@ export function popEditChar(): void {
 
 export function loadBinary(bytes: Uint8Array, filename: string): void {
   app.binary = bytes;
+  // Snapshot via .slice() so future writeBytes() mutations don't
+  // propagate into the original.
+  app.binaryOrig = bytes.slice();
   app.filename = filename;
   app.dirty = false;
+  app.binaryRev = 0;
   app.cursor = 0;
   app.view = "raw";
+}
+
+/** True when the byte at `offset` differs from the loaded snapshot. */
+export function isByteChanged(offset: number): boolean {
+  if (!app.binary || !app.binaryOrig) return false;
+  if (offset < 0 || offset >= app.binary.length) return false;
+  if (offset >= app.binaryOrig.length) return true;
+  return app.binary[offset] !== app.binaryOrig[offset];
+}
+
+/** True when any byte in `[start, end)` differs from the loaded snapshot. */
+export function isRangeChanged(start: number, end: number): boolean {
+  if (!app.binary || !app.binaryOrig) return false;
+  for (let off = start; off < end; off++) {
+    if (isByteChanged(off)) return true;
+  }
+  return false;
 }
 
 export function setCursor(offset: number, size = 1): void {
@@ -236,6 +274,7 @@ export function writeByte(offset: number, value: number): void {
   if (app.binary[offset] === (value & 0xff)) return;
   app.binary[offset] = value & 0xff;
   app.dirty = true;
+  app.binaryRev++;
 }
 
 export function writeBytes(offset: number, bytes: Uint8Array): void {
@@ -248,5 +287,8 @@ export function writeBytes(offset: number, bytes: Uint8Array): void {
       changed = true;
     }
   }
-  if (changed) app.dirty = true;
+  if (changed) {
+    app.dirty = true;
+    app.binaryRev++;
+  }
 }
