@@ -38,13 +38,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Build the web app and its workspace deps under the GitHub Pages
-      # sub-path. Without TUNEX_BASE_PATH set, asset URLs resolve to
-      # `/assets/...` and 404 against `emdzej.github.io/tunex/...`.
-      - name: Build (Pages sub-path)
+      # Custom domain (tunex.bimmerz.app) is served from the root —
+      # leave Vite's base at the default "/" and ship a CNAME at the
+      # site root so Pages knows which repo to map the host onto.
+      - name: Build
         run: pnpm --filter @tunex/web... build
-        env:
-          TUNEX_BASE_PATH: /tunex/
+
+      - name: Add CNAME
+        run: echo "tunex.bimmerz.app" > apps/web/dist/CNAME
 
       - uses: actions/configure-pages@v5
 
