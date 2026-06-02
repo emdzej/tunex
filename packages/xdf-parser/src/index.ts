@@ -102,6 +102,14 @@ export interface XdfConstant extends XdfItemCommon {
   rangehigh?: number;
   datatype?: number;
   unittype?: number;
+  /**
+   * Display-format hint chosen by the .xdf author. Conventional values:
+   *   1 = decimal (default)
+   *   2 = alternate decimal (scientific / different precision)
+   *   3 = hex / address-like
+   *   4 = ASCII / label (axes only in practice)
+   */
+  outputtype?: number;
   /** Raw MATH equation string, e.g. "0.75*X-48.0". */
   mathEquation: string;
 }
@@ -138,6 +146,21 @@ export interface XdfAxisLabel {
   value: string;
 }
 
+/**
+ * Reference from an axis to another XDFTABLE used as a shared axis.
+ * In real-world ECU files the X/Y axes of most tables share definitions
+ * (e.g. one global RPM scale, one global load scale) — `linkObjId`
+ * points at the `uniqueid` of the shared axis-table.
+ *
+ * `type=3` is the only variant observed across the MS41/MS42/MS43
+ * files; tunex carries the value through for forward-compat but treats
+ * any non-zero `type` as "follow the link".
+ */
+export interface XdfEmbedInfo {
+  type: number;
+  linkObjId: number;
+}
+
 export interface XdfAxis {
   id: "x" | "y" | "z";
   uniqueid: number;
@@ -157,6 +180,8 @@ export interface XdfAxis {
   max?: number;
   /** When present, axis is rendered as discrete labels instead of values. */
   labels: XdfAxisLabel[];
+  /** Link to another XDFTABLE that supplies this axis's values. */
+  embedInfo?: XdfEmbedInfo;
   mathEquation: string;
 }
 
@@ -357,6 +382,7 @@ function parseConstant(el: XmlElement, defaults: XdfDefaults): XdfConstant {
   const rangeHigh = getText(el, "rangehigh", "");
   const datatypeText = getText(el, "datatype", "");
   const unittypeText = getText(el, "unittype", "");
+  const outputtypeText = getText(el, "outputtype", "");
   const unitsText = getText(el, "units", "");
   return {
     ...parseCommon(el),
@@ -368,6 +394,7 @@ function parseConstant(el: XmlElement, defaults: XdfDefaults): XdfConstant {
     rangehigh: rangeHigh !== "" ? parseNumber(rangeHigh, 0) : undefined,
     datatype: datatypeText !== "" ? parseNumber(datatypeText, 0) : undefined,
     unittype: unittypeText !== "" ? parseNumber(unittypeText, 0) : undefined,
+    outputtype: outputtypeText !== "" ? parseNumber(outputtypeText, 0) : undefined,
     mathEquation: parseMathEquation(el),
   };
 }
@@ -427,6 +454,23 @@ function parseAxis(el: XmlElement, defaults: XdfDefaults): XdfAxis {
   const minText = getText(el, "min", "");
   const maxText = getText(el, "max", "");
   const unitsText = getText(el, "units", "");
+
+  // embedinfo is an inline child carrying just two attributes:
+  //   <embedinfo type="3" linkobjid="0x4AE9" />
+  // It only ever appears once per axis. Resolve later via uniqueid
+  // lookup at render time.
+  let embedInfo: XdfEmbedInfo | undefined;
+  const embedInfoList = el.getElementsByTagName("embedinfo");
+  for (let i = 0; i < embedInfoList.length; i++) {
+    const ei = embedInfoList.item(i);
+    if (!ei || ei.parentElement !== el) continue;
+    embedInfo = {
+      type: parseNumber(getAttr(ei, "type"), 0),
+      linkObjId: parseNumber(getAttr(ei, "linkobjid"), 0),
+    };
+    break;
+  }
+
   return {
     id,
     uniqueid: parseNumber(getAttr(el, "uniqueid"), 0),
@@ -440,6 +484,7 @@ function parseAxis(el: XmlElement, defaults: XdfDefaults): XdfAxis {
     min: minText !== "" ? parseNumber(minText, 0) : undefined,
     max: maxText !== "" ? parseNumber(maxText, 0) : undefined,
     labels,
+    embedInfo,
     mathEquation: parseMathEquation(el),
   };
 }

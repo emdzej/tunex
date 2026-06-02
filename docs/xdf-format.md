@@ -420,15 +420,10 @@ declares.
 
 - **3D tables** — the parser captures all three axes, but the editor
   doesn't yet have a UI for editing 2D grids per Z-axis slice.
-- **`<embedinfo>`** — sub-block on some axes that references another
-  item by id, used by TunerPro to share axis definitions. Parsed
-  partially; not yet wired into the editor.
 - **`<DALINK>`** — data-acquisition reference (live ECU). Out of
   scope.
 - **Encrypted XDF (`<openpassword>` / `<modifypassword>`)** — read
   enough of the structure to surface a meaningful error.
-- **Authored output formats beyond `decimal` and `label`** — `2` and
-  `3` are stored but not specially rendered.
 
 ## Reference files
 

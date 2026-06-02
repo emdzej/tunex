@@ -53,14 +53,19 @@
   // attribute (confirmed via Ghidra serialiser).
   const decimalpl = $derived(zAxis?.decimalpl ?? 2);
 
-  // Display mode toggle. Hex display only makes sense for raw byte
-  // lookups — i.e. 8-bit unsigned cells. Wider ints render as numbers
-  // because their magnitudes are usually what matters; signed and
-  // float types stay decimal too. The toggle is hidden when hex isn't
-  // applicable; the formatter falls through to decimal regardless.
+  // Display mode toggle. Hex makes sense for two cases:
+  //   - 8-bit unsigned cells (the byte-table convention).
+  //   - Wider unsigned cells where the .xdf author flagged
+  //     outputtype=3 (typically DTC P-codes, masks, or address-like
+  //     constants where the author wanted hex display).
+  // Signed and float types stay decimal — the toggle isn't shown.
   let displayMode = $state<"dec" | "hex">("hex");
   const canShowHex = $derived(
-    zSpec ? !zSpec.float && !zSpec.signed && zSpec.sizeBits === 8 : false,
+    zSpec
+      ? !zSpec.float &&
+          !zSpec.signed &&
+          (zSpec.sizeBits === 8 || zAxis?.outputtype === 3)
+      : false,
   );
   const hexWidth = $derived(zSpec ? Math.max(2, Math.ceil(zSpec.sizeBits / 4)) : 2);
 
@@ -131,9 +136,29 @@
     return `hsla(${hue.toFixed(0)}, 70%, 50%, 0.35)`;
   }
 
+  /**
+   * Resolve an axis's labels — following an embedinfo link when set.
+   *
+   * Real-world ECU XDFs share axis definitions across many tables (one
+   * canonical RPM scale, one canonical load scale, etc.) via
+   * `<embedinfo type="3" linkobjid="0x…"/>`. The linked uniqueid points
+   * at another XDFTABLE whose axes carry the actual label / value list;
+   * tunex walks the link and picks the axis whose `indexcount` matches
+   * ours.
+   */
+  function resolveLabels(axis: XdfAxis): { index: number; value: string }[] {
+    if (axis.labels.length > 0 || !axis.embedInfo) return axis.labels;
+    const linked = xdf.items.find((i) => i.uniqueid === axis.embedInfo!.linkObjId);
+    if (!linked || linked.kind !== "table") return axis.labels;
+    const myCount = axis.indexcount;
+    const match = linked.axes.find((a) => a.labels.length > 0 && a.indexcount === myCount);
+    return match?.labels ?? axis.labels;
+  }
+
   function axisLabel(axis: XdfAxis | undefined, idx: number): string {
     if (!axis) return String(idx);
-    const lab = axis.labels.find((l) => l.index === idx);
+    const labels = resolveLabels(axis);
+    const lab = labels.find((l) => l.index === idx);
     if (!lab) return String(idx);
     // Many .xdf files store axis labels as float-formatted integers
     // ("0.00", "1.00"). Strip the trailing zeros so integers render

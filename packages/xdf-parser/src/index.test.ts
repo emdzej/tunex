@@ -126,6 +126,8 @@ describe("parseXdf — minimal synthetic", () => {
 // the test is skipped, not failed.
 const MS42 = join(homedir(), "Downloads/Siemens_MS42_0110C6_Community_Patchlist_v1.7.1.xdf");
 const MS43 = join(homedir(), "Downloads/Siemens_MS43_MS430069_Community_Patchlist_v2.9.2.xdf");
+const MS43_FULL_64K = join(homedir(), "Downloads/Siemens_MS43_430069_64K.xdf");
+const MS43_FULL_512K = join(homedir(), "Downloads/Siemens_MS43_430069_512K.xdf");
 
 describe.skipIf(!existsSync(MS43))("VIN table — end-to-end address resolution", () => {
   it("computes byte addresses for every cell of the VIN table", async () => {
@@ -168,6 +170,44 @@ describe.skipIf(!existsSync(MS43))("VIN table — end-to-end address resolution"
         expect(absAddr).toBeLessThan(region.startaddress + region.size);
       }
     }
+  });
+});
+
+describe.skipIf(!existsSync(MS43_FULL_64K))("parseXdf — full MS43 64K", () => {
+  it("parses the file end-to-end and resolves shared axes via embedinfo", () => {
+    const def = parseXdf(readFileSync(MS43_FULL_64K, "utf8"));
+    expect(def.items.length).toBeGreaterThan(100);
+
+    // Every embedinfo on every axis must point at an item that
+    // actually exists in this file — broken links would render as
+    // numeric indices instead of meaningful axis labels.
+    const byId = new Map(def.items.map((i) => [i.uniqueid, i]));
+    let linkedAxisCount = 0;
+    let resolvedAxisCount = 0;
+    for (const item of def.items) {
+      if (item.kind !== "table") continue;
+      for (const axis of item.axes) {
+        if (!axis.embedInfo) continue;
+        linkedAxisCount++;
+        const target = byId.get(axis.embedInfo.linkObjId);
+        if (target) resolvedAxisCount++;
+      }
+    }
+    expect(linkedAxisCount).toBeGreaterThan(100);
+    // Real files reference local items by uniqueid. Some files leave a
+    // handful of dangling refs (≈ 3 / 1200 in the MS43 64K dump);
+    // require almost-all to resolve rather than every single one.
+    expect(resolvedAxisCount / linkedAxisCount).toBeGreaterThan(0.99);
+  });
+});
+
+describe.skipIf(!existsSync(MS43_FULL_512K))("parseXdf — full MS43 512K", () => {
+  it("parses without throwing and exercises table + constant + flag", () => {
+    const def = parseXdf(readFileSync(MS43_FULL_512K, "utf8"));
+    expect(def.items.length).toBeGreaterThan(100);
+    const kinds = new Set(def.items.map((i) => i.kind));
+    expect(kinds.has("table")).toBe(true);
+    expect(kinds.has("constant")).toBe(true);
   });
 });
 

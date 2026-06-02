@@ -43,9 +43,14 @@
 
   // Display mode: decimal (default — uses MATH-converted engineering
   // value) or hex (raw bytes, only meaningful for non-float types).
-  // Toggle is a per-constant local state; users move between
-  // constants frequently enough that persisting feels noisy.
+  // The .xdf author can pre-select hex via outputtype=3 (used for DTC
+  // P-codes and other address-like fields). When the selected item
+  // changes, snap back to that item's author-preferred default so each
+  // constant starts in the right mode.
   let displayMode = $state<"dec" | "hex">("dec");
+  $effect(() => {
+    displayMode = item.outputtype === 3 ? "hex" : "dec";
+  });
   const canShowHex = $derived(!spec.float);
   const hexWidth = $derived(Math.max(2, Math.ceil(spec.sizeBits / 4)));
   // TunerPro default: decimalpl = 2 (XDFCONSTANT only emits the tag
