@@ -93,9 +93,14 @@
   function readCell(row: number, col: number): CellRead {
     if (!app.binary) return { raw: null, eng: null, reason: "no firmware loaded" };
     if (!zAxis || !zSpec) return { raw: null, eng: null, reason: "no Z axis" };
-    const cellAddr = tableCellAddress(zAxis.embed, row, col);
+    const e = zAxis.embed;
+    const cellAddr = tableCellAddress(e, row, col);
     if (cellAddr === null) {
-      return { raw: null, eng: null, reason: "cell not byte-aligned" };
+      return {
+        raw: null,
+        eng: null,
+        reason: `tableCellAddress(row=${row}, col=${col}) → null. embed: ele=${e.elementsizebits}, rows=${e.rowcount}, cols=${e.colcount}, major=${e.majorstridebits}, minor=${e.minorstridebits}, addr=0x${e.address.toString(16)}`,
+      };
     }
     const absAddr = resolveAddress(cellAddr, xdf.header.baseOffset);
     const raw = readScalar(app.binary, { ...zSpec, address: absAddr });

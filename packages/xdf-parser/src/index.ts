@@ -258,7 +258,12 @@ function parseCategoryMems(el: XmlElement): number[] {
     // CATEGORYMEM siblings can belong to nested children (e.g. axis
     // children inside a table). Skip ones not directly under `el`.
     if (cm.parentElement !== el) continue;
-    out.push(parseNumber(getAttr(cm, "category"), 0));
+    // CATEGORYMEM `category` is 1-based — `category="1"` points at the
+    // first <CATEGORY index="0x0">. Normalise to 0-based so callers
+    // can match directly against <CATEGORY index="…">. Values < 1 are
+    // dropped (nothing in the wild uses 0).
+    const oneBased = parseNumber(getAttr(cm, "category"), 0);
+    if (oneBased >= 1) out.push(oneBased - 1);
   }
   return out;
 }

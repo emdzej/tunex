@@ -96,7 +96,10 @@ describe("parseXdf — minimal synthetic", () => {
     expect(c.units).toBe("%");
     expect(c.rangehigh).toBe(100);
     expect(c.mathEquation).toBe("0.5*X");
-    expect(c.categoryIndices).toEqual([1]);
+    // CATEGORYMEM category="1" is 1-based → points at the first header
+    // category (index 0). Synthetic file places this constant in
+    // category 0 ("Cat A") via category="1".
+    expect(c.categoryIndices).toEqual([0]);
   });
 
   it("parses XDFFLAG", () => {
