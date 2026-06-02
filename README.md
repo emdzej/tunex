@@ -164,4 +164,10 @@ If you find this project useful, consider [buying me a coffee](https://buymeacof
 
 ## License
 
-See `LICENSE` (TBD).
+[PolyForm Noncommercial 1.0.0](./LICENSE) — free for noncommercial use (personal projects, research, education, hobby tuning on your own car). Commercial use requires a separate licence — open an issue if you need one.
+
+This repository contains no BMW or TunerPro proprietary data. All firmware binaries and `.xdf` definition files the tool consumes must come from sources the user has the right to use.
+
+## Disclaimer
+
+This project is for educational and research purposes only. It is not affiliated with BMW AG or TunerPro.
