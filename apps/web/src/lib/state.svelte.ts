@@ -1,4 +1,5 @@
-import type { XdfDefinition } from "@tunex/xdf-parser";
+import type { XdfDefinition, XdfItem } from "@tunex/xdf-parser";
+import { parseXdf, XdfParseError, resolveAddress, resolveEmbedded } from "@tunex/xdf-parser";
 
 export type AppView = "picker" | "raw" | "structured";
 
@@ -29,10 +30,16 @@ export const app = $state<{
   contentsMode: ContentsMode;
   /** Render numeric contents as horizontal bars instead of digits. */
   contentsBars: boolean;
-  /** Loaded .xdf definition for structured editing (Milestone 2). */
+  /** Loaded .xdf definition for structured editing. */
   xdf: XdfDefinition | null;
   /** Filename of the .xdf for display. */
   xdfFilename: string;
+  /** Last XDF parse error message (null when none / cleared on success). */
+  xdfError: string | null;
+  /** uniqueid of the currently focused structured item. */
+  selectedItemId: number | null;
+  /** Byte range to highlight in the hex view (cross-link from structured). */
+  highlightRange: { start: number; end: number } | null;
 }>({
   view: "picker",
   binary: null,
@@ -43,7 +50,89 @@ export const app = $state<{
   contentsBars: false,
   xdf: null,
   xdfFilename: "",
+  xdfError: null,
+  selectedItemId: null,
+  highlightRange: null,
 });
+
+export function loadXdf(text: string, filename: string): void {
+  try {
+    app.xdf = parseXdf(text);
+    app.xdfFilename = filename;
+    app.xdfError = null;
+    app.selectedItemId = null;
+    app.highlightRange = null;
+  } catch (err) {
+    app.xdf = null;
+    app.xdfFilename = filename;
+    app.xdfError =
+      err instanceof XdfParseError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : String(err);
+  }
+}
+
+export function selectXdfItem(item: XdfItem | null): void {
+  app.selectedItemId = item?.uniqueid ?? null;
+  app.highlightRange = itemByteRange(item, app.xdf);
+}
+
+export function findXdfItem(id: number | null): XdfItem | null {
+  if (id === null || !app.xdf) return null;
+  return app.xdf.items.find((i) => i.uniqueid === id) ?? null;
+}
+
+/**
+ * Byte span covered by an item (after resolving BASEOFFSET). Used to
+ * highlight the corresponding bytes in the hex view and to jump the
+ * cursor when the user clicks "Jump to bytes".
+ *
+ * Returns null for tables (multi-region — full overlay isn't useful)
+ * and for items whose embed couldn't be resolved.
+ */
+export function itemByteRange(
+  item: XdfItem | null,
+  xdf: XdfDefinition | null,
+): { start: number; end: number } | null {
+  if (!item || !xdf) return null;
+  switch (item.kind) {
+    case "constant":
+    case "flag": {
+      const spec = resolveEmbedded(item.embed, xdf.header.baseOffset, xdf.header.defaults);
+      const size = Math.max(1, Math.ceil(spec.sizeBits / 8));
+      return { start: spec.address, end: spec.address + size };
+    }
+    case "patch": {
+      if (item.entries.length === 0) return null;
+      let start = Number.POSITIVE_INFINITY;
+      let end = Number.NEGATIVE_INFINITY;
+      for (const e of item.entries) {
+        // BASEOFFSET applies uniformly across the XDF — same assumption
+        // as embed addresses. The MS42/MS43 samples both use offset=0,
+        // so this is unverified for non-zero offsets.
+        const addr = resolveAddress(e.address, xdf.header.baseOffset);
+        if (addr < start) start = addr;
+        if (addr + e.datasize > end) end = addr + e.datasize;
+      }
+      return { start, end };
+    }
+    case "table": {
+      // Z (data) axis covers the table's actual bytes. Use rowcount×colcount
+      // × element size to bound the highlight — falls back to size from
+      // indexcount when rowcount/colcount aren't populated.
+      const z = item.axes.find((a) => a.id === "z");
+      if (!z) return null;
+      const spec = resolveEmbedded(z.embed, xdf.header.baseOffset, xdf.header.defaults);
+      const rows = z.embed.rowcount > 0 ? z.embed.rowcount : 1;
+      const cols = z.embed.colcount > 0 ? z.embed.colcount : Math.max(1, z.indexcount);
+      const elBytes = Math.max(1, Math.ceil(spec.sizeBits / 8));
+      const bytes = rows * cols * elBytes;
+      return { start: spec.address, end: spec.address + bytes };
+    }
+  }
+}
 
 // Inline hex-edit session state. Tracks the start byte and a raw input
 // buffer of accumulated hex chars (spaces ignored). $derived helpers

@@ -278,7 +278,7 @@
   <div
     bind:this={scrollEl}
     onscroll={onScroll}
-    class="relative h-full overflow-auto bg-base font-hex text-xs leading-5"
+    class="relative h-full overflow-auto bg-base px-3 py-2 font-hex text-xs leading-5"
     tabindex="0"
     role="grid"
     aria-label="Hex view"
@@ -302,6 +302,10 @@
                 {@const isCursor = off === app.cursor}
                 {@const ei = editInfo(off)}
                 {@const printable = isPrintable(effectiveByte(off))}
+                {@const highlighted =
+                  app.highlightRange !== null &&
+                  off >= app.highlightRange.start &&
+                  off < app.highlightRange.end}
                 <button
                   type="button"
                   onclick={() => {
@@ -312,6 +316,9 @@
                   class="inline-block px-1 transition"
                   class:bg-accent={ei.editing || isCursor}
                   class:text-black={ei.editing || isCursor}
+                  class:ring-2={highlighted && !isCursor && !ei.editing}
+                  class:ring-accent={highlighted && !isCursor && !ei.editing}
+                  class:ring-opacity-50={highlighted && !isCursor && !ei.editing}
                   class:ring-1={ei.editing && !ei.finalized}
                   class:ring-accent-muted={ei.editing && !ei.finalized}
                   class:text-muted={!isCursor && !ei.editing && !printable}

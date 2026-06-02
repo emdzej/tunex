@@ -1,58 +1,91 @@
 <script lang="ts">
-  import { app } from "../lib/state.svelte";
+  import { app, loadXdf, findXdfItem } from "../lib/state.svelte";
+  import XdfTreePanel from "./XdfTreePanel.svelte";
+  import XdfItemEditor from "./XdfItemEditor.svelte";
 
-  let error = $state<string | null>(null);
+  let importing = $state(false);
+
+  const selected = $derived(findXdfItem(app.selectedItemId));
 
   async function pickXdf(ev: Event): Promise<void> {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    error = null;
+    importing = true;
     try {
       const text = await file.text();
-      app.xdfFilename = file.name;
-      // Milestone 2 wires the actual parser. For now just stash the
-      // filename so the UI confirms the pick worked.
-      void text;
-      error = "Structured editor lands in Milestone 2 — file recognised, parser not yet wired.";
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
+      loadXdf(text, file.name);
+    } finally {
+      importing = false;
+      // Reset the input so picking the same file again re-fires onchange.
+      input.value = "";
     }
+  }
+
+  function unload(): void {
+    app.xdf = null;
+    app.xdfFilename = "";
+    app.xdfError = null;
+    app.selectedItemId = null;
+    app.highlightRange = null;
   }
 </script>
 
-<div class="flex h-full">
-  <aside class="w-72 shrink-0 border-r border-divider bg-surface p-3 text-sm">
-    <h2 class="text-sm font-semibold text-foreground">XDF definition</h2>
-    {#if app.xdfFilename}
-      <p class="mt-2 truncate text-xs text-muted" title={app.xdfFilename}>
-        {app.xdfFilename}
-      </p>
+<div class="flex h-full flex-col">
+  <header class="flex items-center gap-3 border-b border-divider bg-surface px-3 py-2 text-sm">
+    {#if app.xdf}
+      <span class="font-medium text-foreground">{app.xdf.header.deftitle || "XDF"}</span>
+      <span class="font-hex text-xs text-faint">{app.xdfFilename}</span>
+      <span class="text-xs text-faint">v{app.xdf.header.fileversion}</span>
+      <span class="text-xs text-faint">— {app.xdf.items.length} items</span>
+      <span class="flex-1"></span>
+      <button
+        class="rounded border border-divider bg-surface px-2 py-0.5 text-xs text-muted transition hover:border-accent"
+        onclick={unload}
+      >Close</button>
     {:else}
-      <p class="mt-2 text-xs text-faint">
-        Pick a TunerPro .xdf file describing this firmware.
-      </p>
+      <span class="text-muted">No XDF loaded</span>
+      <span class="flex-1"></span>
     {/if}
-
     <label
-      class="mt-3 inline-block cursor-pointer rounded border border-divider bg-elevated px-2 py-1 text-xs text-foreground transition hover:border-accent"
+      class="cursor-pointer rounded bg-accent px-2 py-1 text-xs font-medium text-black transition hover:bg-accent-muted hover:text-white"
     >
-      Choose .xdf…
-      <input type="file" accept=".xdf,.xml" class="hidden" onchange={pickXdf} />
+      {app.xdf ? "Replace .xdf…" : "Open .xdf…"}
+      <input type="file" accept=".xdf,.xml" class="hidden" onchange={pickXdf} disabled={importing} />
     </label>
-  </aside>
+  </header>
 
-  <section class="flex min-w-0 flex-1 items-center justify-center p-8 text-center">
-    {#if error}
-      <p class="max-w-md text-sm text-muted">{error}</p>
-    {:else if !app.xdfFilename}
-      <p class="max-w-md text-sm text-faint">
-        Load an .xdf definition on the left to start editing named parameters.
-      </p>
-    {:else}
-      <p class="max-w-md text-sm text-faint">
-        Parser comes online in Milestone 2.
-      </p>
-    {/if}
-  </section>
+  {#if app.xdfError}
+    <div class="border-b border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+      Failed to parse <span class="font-hex">{app.xdfFilename}</span>: {app.xdfError}
+    </div>
+  {/if}
+
+  {#if !app.xdf}
+    <div class="flex flex-1 items-center justify-center p-8 text-center">
+      <div class="max-w-md space-y-2">
+        <p class="text-sm text-muted">
+          Load a TunerPro <span class="font-hex">.xdf</span> definition to browse the
+          firmware's named constants, flags, patches and tables.
+        </p>
+        <p class="text-xs text-faint">
+          The .xdf file is independent of the firmware — the same definition usually
+          covers multiple binary versions of the same ECU.
+        </p>
+      </div>
+    </div>
+  {:else}
+    <div class="flex min-h-0 flex-1">
+      <aside class="w-72 shrink-0 border-r border-divider bg-base">
+        <XdfTreePanel xdf={app.xdf} />
+      </aside>
+      <section class="min-w-0 flex-1 overflow-auto p-4">
+        {#if selected}
+          <XdfItemEditor item={selected} xdf={app.xdf} />
+        {:else}
+          <p class="text-sm text-faint">Select an item on the left.</p>
+        {/if}
+      </section>
+    </div>
+  {/if}
 </div>
