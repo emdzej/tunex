@@ -60,6 +60,11 @@
   const canShowHex = $derived(zSpec ? !zSpec.float : false);
   const hexWidth = $derived(zSpec ? Math.max(2, Math.ceil(zSpec.sizeBits / 4)) : 2);
 
+  // Optional heatmap colouring per cell. Off by default so the user
+  // opts in for numeric tables where it helps spot curves; toggling
+  // doesn't affect text formatting.
+  let heatmap = $state(false);
+
   function formatValue(eng: number | null, raw: number | null): string {
     if (displayMode === "hex" && canShowHex && raw !== null) {
       // Raw bytes, uppercase, no prefix — TunerPro-style table view.
@@ -76,6 +81,50 @@
     // 1.0 vs 1.0000001.
     if (Number.isInteger(v) && !zSpec?.float) return v.toString();
     return v.toFixed(decimalpl);
+  }
+
+  // Heat-map domain. Prefer the .xdf-declared min/max on the Z axis
+  // (matches what the file author thought was the meaningful range);
+  // fall back to scanning current cell values when those aren't set.
+  // Returns null when the range has zero width (all cells the same
+  // value, or no readable cells), in which case heatmap colouring is
+  // skipped — no useful gradient to draw.
+  const heatRange = $derived.by<{ min: number; max: number } | null>(() => {
+    if (!heatmap || layout.kind !== "grid") return null;
+    if (
+      zAxis?.min !== undefined &&
+      zAxis?.max !== undefined &&
+      Number.isFinite(zAxis.min) &&
+      Number.isFinite(zAxis.max) &&
+      zAxis.min < zAxis.max
+    ) {
+      return { min: zAxis.min, max: zAxis.max };
+    }
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = Number.NEGATIVE_INFINITY;
+    for (let r = 0; r < layout.rows; r++) {
+      for (let c = 0; c < layout.cols; c++) {
+        const cell = readCell(r, c);
+        if (cell.raw === null) continue;
+        const v = cell.eng !== null ? cell.eng : cell.raw;
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+    }
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo >= hi) return null;
+    return { min: lo, max: hi };
+  });
+
+  // Cool→warm gradient (blue 240° → red 0°). Low alpha so the cell's
+  // foreground text stays legible without picking a contrast colour
+  // per cell.
+  function heatColor(eng: number | null, raw: number | null): string | null {
+    if (!heatRange) return null;
+    const v = eng !== null ? eng : raw;
+    if (v === null) return null;
+    const t = Math.max(0, Math.min(1, (v - heatRange.min) / (heatRange.max - heatRange.min)));
+    const hue = 240 * (1 - t);
+    return `hsla(${hue.toFixed(0)}, 70%, 50%, 0.35)`;
   }
 
   function axisLabel(axis: XdfAxis | undefined, idx: number): string {
@@ -224,26 +273,43 @@
       {/if}
     </div>
 
-    {#if canShowHex}
-      <div class="flex items-center gap-1 rounded border border-divider bg-elevated p-0.5 font-hex">
-        <button
-          type="button"
-          class="rounded px-2 py-0.5 transition"
-          class:bg-accent={displayMode === "dec"}
-          class:text-black={displayMode === "dec"}
-          class:text-muted={displayMode !== "dec"}
-          onclick={() => (displayMode = "dec")}
-        >dec</button>
-        <button
-          type="button"
-          class="rounded px-2 py-0.5 transition"
-          class:bg-accent={displayMode === "hex"}
-          class:text-black={displayMode === "hex"}
-          class:text-muted={displayMode !== "hex"}
-          onclick={() => (displayMode = "hex")}
-        >hex</button>
-      </div>
-    {/if}
+    <div class="flex items-center gap-2">
+      {#if canShowHex}
+        <div class="flex items-center gap-1 rounded border border-divider bg-elevated p-0.5 font-hex">
+          <button
+            type="button"
+            class="rounded px-2 py-0.5 transition"
+            class:bg-accent={displayMode === "dec"}
+            class:text-black={displayMode === "dec"}
+            class:text-muted={displayMode !== "dec"}
+            onclick={() => (displayMode = "dec")}
+          >dec</button>
+          <button
+            type="button"
+            class="rounded px-2 py-0.5 transition"
+            class:bg-accent={displayMode === "hex"}
+            class:text-black={displayMode === "hex"}
+            class:text-muted={displayMode !== "hex"}
+            onclick={() => (displayMode = "hex")}
+          >hex</button>
+        </div>
+      {/if}
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded border border-divider bg-elevated px-2 py-0.5 font-hex transition hover:border-accent"
+        class:border-accent={heatmap}
+        class:text-accent={heatmap}
+        class:text-muted={!heatmap}
+        onclick={() => (heatmap = !heatmap)}
+        title="Colour cells by value (blue = low, red = high)"
+      >
+        <span
+          class="inline-block h-2 w-6 rounded-sm"
+          style="background: linear-gradient(90deg, hsl(240,70%,50%), hsl(120,70%,50%), hsl(0,70%,50%));"
+        ></span>
+        heatmap
+      </button>
+    </div>
   </div>
 
   {#if layout.kind === "no-z"}
@@ -275,7 +341,11 @@
               {#each Array.from({ length: layout.cols }, (_, i) => i) as cIdx (cIdx)}
                 {@const cell = readCell(rIdx, cIdx)}
                 {@const isEditing = editing?.row === rIdx && editing?.col === cIdx}
-                <td class="border border-divider px-0 py-0">
+                {@const heat = heatColor(cell.eng, cell.raw)}
+                <td
+                  class="border border-divider px-0 py-0"
+                  style={heat && !isEditing ? `background: ${heat};` : ""}
+                >
                   {#if isEditing}
                     <form onsubmit={commitEdit} class="flex">
                       <!-- svelte-ignore a11y_autofocus -->
