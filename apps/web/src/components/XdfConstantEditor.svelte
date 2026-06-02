@@ -53,6 +53,9 @@
   const decimalpl = $derived(item.decimalpl ?? 2);
 
   function formatEng(v: number): string {
+    // Integer values render without decimals — `42` not `42.00`. Float
+    // types keep the formatting so users see precision differences.
+    if (Number.isInteger(v) && !spec.float) return v.toString();
     return v.toFixed(decimalpl);
   }
 

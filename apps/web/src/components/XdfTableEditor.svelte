@@ -67,38 +67,75 @@
     }
     const v = eng !== null ? eng : raw;
     if (v === null) return "—";
-    if (zSpec?.float || !Number.isInteger(v)) return v.toFixed(decimalpl);
+    // Integer values render without decimals — `255` not `255.00`.
+    // Floats always keep the precision so users can still see e.g.
+    // 1.0 vs 1.0000001.
+    if (Number.isInteger(v) && !zSpec?.float) return v.toString();
     return v.toFixed(decimalpl);
   }
 
   function axisLabel(axis: XdfAxis | undefined, idx: number): string {
     if (!axis) return String(idx);
     const lab = axis.labels.find((l) => l.index === idx);
-    if (lab) return lab.value;
-    return String(idx);
+    if (!lab) return String(idx);
+    // Many .xdf files store axis labels as float-formatted integers
+    // ("0.00", "1.00"). Strip the trailing zeros so integers render
+    // as integers; preserve real fractional labels like "1.50".
+    const n = Number(lab.value);
+    if (Number.isFinite(n) && Number.isInteger(n)) return n.toString();
+    return lab.value;
   }
 
-  function readCell(row: number, col: number): { raw: number | null; eng: number | null } {
-    if (!app.binary || !zAxis || !zSpec) return { raw: null, eng: null };
+  type CellRead =
+    | { raw: number; eng: number | null; absAddr: number }
+    | { raw: null; eng: null; reason: string };
+
+  function readCell(row: number, col: number): CellRead {
+    if (!app.binary) return { raw: null, eng: null, reason: "no firmware loaded" };
+    if (!zAxis || !zSpec) return { raw: null, eng: null, reason: "no Z axis" };
     const cellAddr = tableCellAddress(zAxis.embed, row, col);
-    if (cellAddr === null) return { raw: null, eng: null };
+    if (cellAddr === null) {
+      return { raw: null, eng: null, reason: "cell not byte-aligned" };
+    }
     const absAddr = resolveAddress(cellAddr, xdf.header.baseOffset);
     const raw = readScalar(app.binary, { ...zSpec, address: absAddr });
-    return { raw, eng: raw !== null && zToEng ? zToEng(raw) : null };
+    if (raw === null) {
+      return {
+        raw: null,
+        eng: null,
+        reason: `address 0x${absAddr.toString(16).toUpperCase()} past end of firmware (${app.binary.length} bytes)`,
+      };
+    }
+    return { raw, eng: zToEng ? zToEng(raw) : null, absAddr };
   }
+
+  // First non-OK reason hit while rendering — surfaced once as a panel
+  // above the table so the user doesn't have to inspect each "—" cell.
+  const firstError = $derived.by(() => {
+    if (layout.kind !== "grid") return null;
+    for (let r = 0; r < Math.min(2, layout.rows); r++) {
+      for (let c = 0; c < Math.min(2, layout.cols); c++) {
+        const cell = readCell(r, c);
+        if (cell.raw === null) return cell.reason;
+      }
+    }
+    return null;
+  });
 
   let editing = $state<{ row: number; col: number } | null>(null);
   let editValue = $state("");
   let editError = $state<string | null>(null);
 
   function openEdit(row: number, col: number): void {
-    const { eng, raw } = readCell(row, col);
-    // In hex display mode the user types raw bytes; otherwise the
-    // engineering value (or raw when no inverse is available).
-    if (displayMode === "hex" && canShowHex && raw !== null) {
-      editValue = `0x${hex(raw, hexWidth)}`;
+    const cell = readCell(row, col);
+    if (cell.raw === null) {
+      editError = cell.reason;
+      return;
+    }
+    if (displayMode === "hex" && canShowHex) {
+      editValue = `0x${hex(cell.raw, hexWidth)}`;
     } else {
-      const v = zFromEng ? eng : raw;
+      const v = zFromEng ? cell.eng : cell.raw;
       editValue = v !== null ? v.toString() : "";
     }
     editing = { row, col };
@@ -194,6 +231,11 @@
       Label-only table — no Z (data) axis present.
     </div>
   {:else}
+    {#if firstError}
+      <div class="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-300">
+        Heads up: some cells couldn't be read — {firstError}.
+      </div>
+    {/if}
     <div class="overflow-auto rounded border border-divider">
       <table class="min-w-full border-collapse text-xs font-hex">
         <thead>

@@ -124,6 +124,50 @@ describe("parseXdf — minimal synthetic", () => {
 const MS42 = join(homedir(), "Downloads/Siemens_MS42_0110C6_Community_Patchlist_v1.7.1.xdf");
 const MS43 = join(homedir(), "Downloads/Siemens_MS43_MS430069_Community_Patchlist_v2.9.2.xdf");
 
+describe.skipIf(!existsSync(MS43))("VIN table — end-to-end address resolution", () => {
+  it("computes byte addresses for every cell of the VIN table", async () => {
+    const { resolveEmbedded, tableCellAddress } = await import("./embedded");
+    const { resolveAddress } = await import("./index");
+    const def = parseXdf(readFileSync(MS43, "utf8"));
+    const vin = def.items.find(
+      (i) => i.kind === "table" && i.title === "UIF Vehicle Identification Number",
+    );
+    expect(vin).toBeDefined();
+    if (!vin || vin.kind !== "table") return;
+    const z = vin.axes.find((a) => a.id === "z");
+    expect(z).toBeDefined();
+    if (!z) return;
+
+    // Spec the editor would compute.
+    const spec = resolveEmbedded(z.embed, def.header.baseOffset, def.header.defaults);
+    expect(spec.address).toBe(0x3c40);
+    expect(spec.sizeBits).toBe(8);
+    expect(spec.signed).toBe(false);
+    expect(spec.lsbfirst).toBe(true);
+    expect(spec.float).toBe(false);
+
+    // Z embed metadata.
+    expect(z.embed.rowcount).toBe(14);
+    expect(z.embed.colcount).toBe(13);
+    expect(z.embed.minorstridebits).toBe(272);
+    expect(z.embed.majorstridebits).toBe(0);
+
+    // Walk every cell — must produce non-null, byte-aligned addresses
+    // strictly within the 0x80000-byte firmware region.
+    const region = def.header.regions[0];
+    expect(region.size).toBe(0x80000);
+    for (let r = 0; r < z.embed.rowcount; r++) {
+      for (let c = 0; c < z.embed.colcount; c++) {
+        const cellAddr = tableCellAddress(z.embed, r, c);
+        expect(cellAddr).not.toBeNull();
+        const absAddr = resolveAddress(cellAddr!, def.header.baseOffset);
+        expect(absAddr).toBeGreaterThanOrEqual(region.startaddress);
+        expect(absAddr).toBeLessThan(region.startaddress + region.size);
+      }
+    }
+  });
+});
+
 describe.skipIf(!existsSync(MS42) || !existsSync(MS43))("parseXdf — real .xdf fixtures", () => {
   it("parses the MS42 community patchlist", () => {
     const def = parseXdf(readFileSync(MS42, "utf8"));
