@@ -53,17 +53,21 @@
   // attribute (confirmed via Ghidra serialiser).
   const decimalpl = $derived(zAxis?.decimalpl ?? 2);
 
-  // Display mode toggle. Hex only makes sense for integer cells —
-  // floats always render as decimal.
-  let displayMode = $state<"dec" | "hex">("dec");
+  // Display mode toggle. Hex is the default for integer tables — most
+  // ECU lookups are byte-level so users want to see raw bytes by
+  // default. Floats fall through to decimal regardless.
+  let displayMode = $state<"dec" | "hex">("hex");
   const canShowHex = $derived(zSpec ? !zSpec.float : false);
   const hexWidth = $derived(zSpec ? Math.max(2, Math.ceil(zSpec.sizeBits / 4)) : 2);
 
   function formatValue(eng: number | null, raw: number | null): string {
     if (displayMode === "hex" && canShowHex && raw !== null) {
-      // Hex view shows the underlying raw bytes; MATH would lose
-      // meaning when re-interpreted as hex.
-      return `0x${hex(raw & ((1 << zSpec!.sizeBits) - 1 || 0xffffffff), hexWidth)}`;
+      // Raw bytes, uppercase, no prefix — TunerPro-style table view.
+      // Mask to the cell's bit width so signed negatives wrap into the
+      // unsigned representation; the `|| 0xffffffff` guards the 32-bit
+      // shift overflow case (1 << 32 === 1 in JS).
+      const mask = ((1 << zSpec!.sizeBits) - 1) || 0xffffffff;
+      return hex(raw & mask, hexWidth);
     }
     const v = eng !== null ? eng : raw;
     if (v === null) return "—";
@@ -138,7 +142,8 @@
       return;
     }
     if (displayMode === "hex" && canShowHex) {
-      editValue = `0x${hex(cell.raw, hexWidth)}`;
+      // Pre-fill matches the display: uppercase, no 0x prefix.
+      editValue = hex(cell.raw, hexWidth);
     } else {
       const v = zFromEng ? cell.eng : cell.raw;
       editValue = v !== null ? v.toString() : "";
@@ -150,6 +155,16 @@
   function parseEditValue(): number | null {
     const trimmed = editValue.trim();
     if (trimmed === "") return null;
+    // In hex display mode, accept both bare hex (`FF`) and prefixed
+    // (`0xFF`) — the pre-fill is bare to match the display, but users
+    // pasting in a 0x value shouldn't be rejected.
+    if (displayMode === "hex" && canShowHex) {
+      const negative = trimmed.startsWith("-");
+      const body = trimmed.replace(/^-/, "").replace(/^0x/i, "");
+      if (body === "" || !/^[0-9a-fA-F]+$/.test(body)) return null;
+      const n = parseInt(body, 16);
+      return Number.isFinite(n) ? (negative ? -n : n) : null;
+    }
     if (/^-?0x/i.test(trimmed)) {
       const n = parseInt(trimmed.replace(/^-?0x/i, ""), 16);
       return Number.isFinite(n) ? (trimmed.startsWith("-") ? -n : n) : null;
