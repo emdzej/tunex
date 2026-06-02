@@ -1,0 +1,16 @@
+{
+  "name": "tunex",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Web-based ECU firmware editor following TunerPro conventions.",
+  "type": "module",
+  "scripts": {
+    "web": "pnpm --filter @tunex/web dev",
+    "dev": "pnpm --filter @tunex/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  },
+  "packageManager": "pnpm@10.0.0"
+}

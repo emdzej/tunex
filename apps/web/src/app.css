@@ -1,0 +1,15 @@
+/* Theme tokens from the shared bimmerz preset (bg-base/surface/elevated,
+ * text-foreground/muted/faint, border-divider/rule, mono font). Must come
+ * before any other at-rule per CSS spec. */
+@import "@emdzej/bimmerz-theme/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .font-hex {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-feature-settings: "tnum" 1, "zero" 1;
+  }
+}

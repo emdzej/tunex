@@ -1,0 +1,32 @@
+{
+  "name": "@tunex/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "tunex SPA — load ECU firmware, edit raw hex or via TunerPro .xdf definitions, save.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "echo 'no app-level tests yet — see packages/xdf-parser'"
+  },
+  "dependencies": {
+    "@emdzej/bimmerz-theme": "^0.1.0",
+    "@tunex/xdf-parser": "workspace:*",
+    "workbox-window": "^7.4.1"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "@tsconfig/svelte": "^5.0.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.0",
+    "vite-plugin-pwa": "^1.0.0"
+  }
+}
