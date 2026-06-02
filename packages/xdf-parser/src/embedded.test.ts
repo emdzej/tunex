@@ -9,10 +9,6 @@ import {
   tableCellAddress,
 } from "./embedded";
 import type { XdfBaseOffset, XdfDefaults, XdfEmbeddedData } from "./index";
-// XdfEmbeddedData literals below leave out the optional fields — the
-// embed() helper already provides defaults; here we construct directly
-// for the stride tests.
-void {} as XdfEmbeddedData;
 
 const NO_OFFSET: XdfBaseOffset = { offset: 0, subtract: false };
 const DEFAULTS: XdfDefaults = {
@@ -29,6 +25,8 @@ function embed(part: Partial<XdfEmbeddedData> = {}): XdfEmbeddedData {
     typeflags: 0x02,
     address: 0,
     elementsizebits: 8,
+    rowcount: 0,
+    colcount: 0,
     majorstridebits: 0,
     minorstridebits: 0,
     ...part,
