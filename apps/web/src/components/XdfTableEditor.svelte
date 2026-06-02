@@ -53,11 +53,15 @@
   // attribute (confirmed via Ghidra serialiser).
   const decimalpl = $derived(zAxis?.decimalpl ?? 2);
 
-  // Display mode toggle. Hex is the default for integer tables — most
-  // ECU lookups are byte-level so users want to see raw bytes by
-  // default. Floats fall through to decimal regardless.
+  // Display mode toggle. Hex display only makes sense for raw byte
+  // lookups — i.e. 8-bit unsigned cells. Wider ints render as numbers
+  // because their magnitudes are usually what matters; signed and
+  // float types stay decimal too. The toggle is hidden when hex isn't
+  // applicable; the formatter falls through to decimal regardless.
   let displayMode = $state<"dec" | "hex">("hex");
-  const canShowHex = $derived(zSpec ? !zSpec.float : false);
+  const canShowHex = $derived(
+    zSpec ? !zSpec.float && !zSpec.signed && zSpec.sizeBits === 8 : false,
+  );
   const hexWidth = $derived(zSpec ? Math.max(2, Math.ceil(zSpec.sizeBits / 4)) : 2);
 
   // Optional heatmap colouring per cell. Off by default so the user
