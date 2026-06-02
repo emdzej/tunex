@@ -293,13 +293,21 @@
     editError = null;
   }
 
-  // Svelte action: focus and select the input when it mounts. More
-  // reliable than the autofocus attribute, which browsers only honour
-  // for the first input on the initial page load.
-  function focusOnMount(el: HTMLInputElement): void {
-    el.focus();
-    el.select();
-  }
+  // Focus + select the edit input when it appears. autofocus is
+  // unreliable for inputs that appear after the initial page load,
+  // and a `use:` action sometimes runs before the click that opened
+  // the editor releases focus. Effect-after-bind is the cleanest
+  // ordering: the bind sets editInputEl once the DOM is committed,
+  // and the effect then focuses on the next microtask.
+  let editInputEl = $state<HTMLInputElement | null>(null);
+  $effect(() => {
+    const el = editInputEl;
+    if (!el || !editing) return;
+    queueMicrotask(() => {
+      el.focus();
+      el.select();
+    });
+  });
 </script>
 
 <div class="space-y-3">
@@ -393,7 +401,7 @@
                       <input
                         type="text"
                         bind:value={editValue}
-                        use:focusOnMount
+                        bind:this={editInputEl}
                         class="w-24 bg-accent px-1 py-0.5 text-black focus:outline-none"
                         onkeydown={(e) => {
                           if (e.key === "Escape") {
