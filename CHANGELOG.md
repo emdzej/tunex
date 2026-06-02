@@ -4,6 +4,96 @@ All notable changes to this project are documented here. Versions
 follow [Semantic Versioning](https://semver.org/). Format adapted
 from [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] — 2026-06-02
+
+Second pre-release. Focus: full-file XDF support, structured-editor
+polish, and a much friendlier hex / interpretation workflow.
+
+### Added — `@tunex/xdf-parser`
+
+- `<embedinfo type linkobjid>` parsed on axes; `XdfAxis.embedInfo`
+  carries the link. Verified end-to-end against the full MS43 64K /
+  512K reference XDFs (1233 of 1236 cross-references resolve; the 3
+  dangling refs are stale in the source file).
+- `XdfConstant.outputtype` now captured.
+- Encrypted XDF detection — `parseXdf` throws an `XdfParseError` up
+  front when `<openpassword>` / `<modifypassword>` is set on the
+  header.
+- `CATEGORYMEM category="N"` normalised from 1-based to 0-based at
+  parse time and deduped — items with two slots pointing at the same
+  category appear once instead of twice.
+- Stride formula for non-contiguous table sub-views:
+  `tail_stride + (cols - 1) * within_row_step`. Decoded with the help
+  of the MS43 UIF VIN / DATE / SOFT sub-tables.
+- 67 unit tests (up from 58), including fixtures against the full
+  MS43 64K + 512K dumps.
+
+### Added — Structured editor
+
+- Axis labels follow `embedinfo` links — shared RPM / load axes
+  render with their actual values across every table that references
+  them.
+- Tables: heatmap colouring (default on) — cell backgrounds map to
+  the z-axis range with a cool→warm gradient.
+- Tables: hex / decimal display toggle. Defaults to hex for 8-bit
+  unsigned cells and for any cell whose z axis declared
+  `outputtype="3"`; decimal otherwise.
+- Tables: integer cells render without trailing `.00`; numeric-looking
+  axis labels (`0.00` → `0`) collapse the same way.
+- Tables: inline diagnostic banner explains why a cell read returned
+  null (embed values, address, firmware length) instead of just
+  rendering "—".
+- Constants flagged `outputtype="3"` default to hex display; navigating
+  between constants snaps back to each one's author-preferred mode.
+- XDF file swap remounts the tree so search filter and per-category
+  collapse state reset to the new file's contents.
+- Encrypted XDFs surface in the error banner instead of populating
+  the tree with garbled items.
+
+### Added — RAW editor
+
+- Clickable contents cells — each element in the right-column
+  contents view (text mode + bars mode) is now a click target. Clicks
+  set `app.cursorSize` so a `u16` click highlights two bytes, a `u32`
+  click highlights four.
+- "At cursor" interpretation panel reworked: paired LE/BE columns
+  halve the vertical height, the panel collapses to a single header
+  via a chevron (state persists in ui-prefs), the edit-as-type input
+  auto-populates with the cursor's current value, and a `dec / hex`
+  toggle switches the input base (hidden on float types).
+- Hex view scroll container picks up `px-3 py-2` inner padding so the
+  byte rows no longer hug the window edge.
+- Cell click targets are wide enough to hit comfortably even for
+  single ASCII characters.
+
+### Changed
+
+- Version source moved from `apps/web/package.json` to the workspace
+  root `package.json` — a single bump propagates to the header pill,
+  the release URL, and the bimmerz-hub tile.
+
+### Fixed
+
+- Structured tree no longer crashes with "duplicate each key" when an
+  item lists the same `CATEGORYMEM` slot twice (parser-side dedupe +
+  resilient composite key on the `each` block).
+- "ECU Information" category now populates correctly (was empty due
+  to the 1-based CATEGORYMEM bug).
+- CI typecheck failure in the embedded-data tests (a stray
+  `void {} as XdfEmbeddedData` placeholder + missing rowcount/colcount
+  defaults in the test helper).
+- Pages deploy now serves from the custom domain (`tunex.bimmerz.app`)
+  rather than a `/tunex/` sub-path; CNAME emitted in the workflow.
+
+### Docs
+
+- `docs/xdf-format.md` documents the .xdf XML schema as the parser
+  sees it — header, item kinds, EMBEDDEDDATA stride formula,
+  CATEGORYMEM quirk, MATH grammar, `mmedtypeflags` bit layout, and
+  the open-gap list.
+- Surrounding integration: TUNEX feature card on bimmerz.app and tile
+  in bimmerz-hub.
+
 ## [0.1.0] — 2026-06-02
 
 Initial public release.
@@ -115,4 +205,5 @@ Initial public release.
 - Vite `base` parameterised via `TUNEX_BASE_PATH` so the same build
   can serve from a sub-path or the domain root.
 
+[0.2.0]: https://github.com/emdzej/tunex/releases/tag/0.2.0
 [0.1.0]: https://github.com/emdzej/tunex/releases/tag/0.1.0

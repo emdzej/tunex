@@ -18,15 +18,18 @@ Live: <https://tunex.bimmerz.app>
   without jank.
 - Cursor via click + arrow keys + `Home` / `End` / `PageUp` / `PageDown`.
 - `g` jumps focus to the go-to-offset input; type decimal or `0x…` hex.
-- Data interpretation panel: byte at cursor read as
-  u8/i8/u16/i16/u32/i32/f32/f64 (LE + BE) plus ASCII char and UTF-8
-  codepoint.
-- Edit-at-cursor as a chosen type, or double-click any byte to start an
-  inline hex-pair edit (type `FF AA CC…`, `Enter` commits, `Esc`
-  cancels).
-- Right-column contents view toggleable to ASCII / u8 / u16 / i16 / u32
-  / i32 with an optional bars-mode visualisation for spotting tables and
-  curves at a glance.
+- "At cursor" interpretation panel — paired LE/BE columns for every
+  multi-byte type (u16, i16, u32, i32, f32, f64) plus u8/i8, ASCII,
+  and UTF-8. Collapsible to a single header row when you don't need
+  it.
+- Edit-as-type input auto-populates with the cursor's current value;
+  flip the input base between decimal and hex; submit to write back.
+- Double-click any byte to start an inline hex-pair edit
+  (type `FF AA CC…`, `Enter` commits, `Esc` cancels).
+- Right-column contents view toggleable to ASCII / u8 / u16 / i16 /
+  u32 / i32 with an optional bars-mode visualisation. **Click any
+  element** to jump the cursor to its byte range — a u16 click
+  highlights two bytes, a u32 four.
 - Bookmarks: named offsets with descriptions, organised into one level
   of user-defined folders, persisted to `localStorage`.
 - Resizable divider between the hex view and the right sidebar
@@ -36,19 +39,25 @@ Live: <https://tunex.bimmerz.app>
 
 - Open a TunerPro `.xdf` definition file (independent of the firmware —
   the same `.xdf` usually covers multiple binary versions of one ECU).
+  Encrypted files are detected and surfaced with a clear error.
 - Left rail: categories with item counts, collapsible, with a
-  search-as-you-type filter.
+  search-as-you-type filter. Tree state resets when you replace the
+  `.xdf`.
 - Per-kind editors:
   - `XDFCONSTANT` — read engineering value via the `MATH` equation,
     write back through the inverse for linear forms (`aX+b`). Non-linear
-    MATH falls back to raw-value entry.
+    MATH falls back to raw-value entry. Author-declared
+    `outputtype="3"` pre-selects hex display.
   - `XDFFLAG` — checkbox toggling the masked bit.
   - `XDFPATCH` — per-entry applied / virgin / neither state badges;
     Apply or Revert per entry, plus whole-patch Apply / Revert-to-virgin
     (the "virginise" workflow). Destructive patches without `basedata`
     (e.g. "Clear ISN Data") apply but can't be reverted.
-  - `XDFTABLE` — row/column grid for contiguous tables with axis
-    labels; inline cell editing.
+  - `XDFTABLE` — row/column grid with axis labels resolved through
+    `<embedinfo>` (shared RPM / load axes resolve automatically),
+    inline cell editing, dec/hex toggle, heatmap colouring by value
+    (on by default), and support for non-contiguous sub-views via
+    the stride formula.
 - Selecting an item highlights its byte range in the hex view, and the
   "Jump 0x… →" button switches to the RAW tab with the cursor seated at
   the item's start.

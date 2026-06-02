@@ -1,6 +1,6 @@
 {
   "name": "@tunex/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "tunex SPA — load ECU firmware, edit raw hex or via TunerPro .xdf definitions, save.",
   "type": "module",
