@@ -250,6 +250,7 @@ function parseEmbeddedData(el: XmlElement, defaults: XdfDefaults): XdfEmbeddedDa
 }
 
 function parseCategoryMems(el: XmlElement): number[] {
+  const seen = new Set<number>();
   const out: number[] = [];
   const list = el.getElementsByTagName("CATEGORYMEM");
   for (let i = 0; i < list.length; i++) {
@@ -263,7 +264,14 @@ function parseCategoryMems(el: XmlElement): number[] {
     // can match directly against <CATEGORY index="…">. Values < 1 are
     // dropped (nothing in the wild uses 0).
     const oneBased = parseNumber(getAttr(cm, "category"), 0);
-    if (oneBased >= 1) out.push(oneBased - 1);
+    if (oneBased < 1) continue;
+    const idx = oneBased - 1;
+    // Some .xdf files repeat the same category across multiple
+    // CATEGORYMEM slots — dedupe so downstream consumers don't list
+    // the item twice in one category's tree.
+    if (seen.has(idx)) continue;
+    seen.add(idx);
+    out.push(idx);
   }
   return out;
 }

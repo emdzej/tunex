@@ -101,7 +101,7 @@
           </button>
           {#if !collapsed[cat.index]}
             <ul class="ml-3 mt-0.5 space-y-0.5">
-              {#each items as item (item.uniqueid)}
+              {#each items as item, itemIdx (`${item.uniqueid}:${itemIdx}`)}
                 {@const selected = app.selectedItemId === item.uniqueid}
                 <li>
                   <button
